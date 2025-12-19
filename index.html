@@ -38,10 +38,17 @@
             <section id="dashboard" class="section active">
                 <div class="card">
                     <div class="card-header">
-                        <h2 class="card-title">Funcionários</h2>
+                        <h2 class="card-title">
+                            Funcionários
+                            <div class="help-tip">
+                                <span>?</span>
+                                <div class="help-content">
+                                    Clique em "Banheiro" ou "Café" para registrar saída. Clique em "Volta" quando retornar.
+                                </div>
+                            </div>
+                        </h2>
                         <button class="btn btn-primary" onclick="openEmployeeModal()">+ Adicionar</button>
                     </div>
-                    <div class="info-box">Clique em "Banheiro" ou "Café" para registrar saída. Clique em "Volta" quando retornar.</div>
                     <div id="employeeGrid" class="employee-grid"></div>
                 </div>
             </section>
