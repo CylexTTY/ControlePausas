@@ -24,6 +24,8 @@ let state = {
     settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS))
 };
 
+let draggedEmployee = null;
+
 function getStorageKey() {
     return `pausas_${state.workspace.toLowerCase().replace(/\s+/g, '_')}`;
 }
@@ -256,15 +258,31 @@ function renderEmployeeGrid() {
         grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Nenhum funcionário cadastrado</div>';
         return;
     }
-    grid.innerHTML = state.employees.map(e => {
+
+    grid.innerHTML = state.employees.map((e, index) => {
         const active = getActiveRecord(e.id);
+        const type = active?.type || '';
+        const typeLabel = type === 'bathroom' ? 'Banheiro' : type === 'coffee' ? 'Café' : '';
+        const statusText = active
+            ? `${typeLabel} desde ${formatTime(active.startTime)}`
+            : 'Disponível';
+
+        const cardClass = active ? `absent-${type}` : 'available';
+        const statusClass = active ? `active-${type}` : 'active-available';
+        const timerClass = active ? `active timer-${type}` : '';
+
         return `
-            <div class="employee-card ${active ? 'absent' : ''}">
-                <div class="employee-name">${e.name}</div>
-                <div class="employee-status ${active ? 'active' : ''}">
-                    ${active ? `${active.type === 'bathroom' ? 'Banheiro' : 'Café'} desde ${formatTime(active.startTime)}` : 'Disponível'}
+            <div class="employee-card ${cardClass}" 
+                 data-employee="${e.id}" 
+                 data-index="${index}"
+                 draggable="true">
+                <div class="employee-header">
+                    <div class="employee-info">
+                        <div class="employee-name">${e.name}</div>
+                        <div class="employee-status ${statusClass}">${statusText}</div>
+                    </div>
+                    <div class="employee-timer ${timerClass}" data-start="${active?.startTime || ''}">00:00</div>
                 </div>
-                <div class="employee-timer" data-start="${active?.startTime || ''}"></div>
                 <div class="employee-actions">
                     ${active ? `
                         <button class="btn btn-success" onclick="registerReturn('${e.id}')">Registrar Volta</button>
@@ -276,11 +294,77 @@ function renderEmployeeGrid() {
             </div>
         `;
     }).join('');
+
+    setupDragAndDrop();
+    updateTimers();
+}
+
+function setupDragAndDrop() {
+    const cards = document.querySelectorAll('.employee-card[draggable="true"]');
+
+    cards.forEach(card => {
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragend', handleDragEnd);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('dragenter', handleDragEnter);
+        card.addEventListener('dragleave', handleDragLeave);
+        card.addEventListener('drop', handleDrop);
+    });
+}
+
+function handleDragStart(e) {
+    draggedEmployee = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.dataset.index);
+}
+
+function handleDragEnd() {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.employee-card').forEach(card => {
+        card.classList.remove('drag-over');
+    });
+    draggedEmployee = null;
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function handleDragEnter(e) {
+    e.preventDefault();
+    if (this !== draggedEmployee) {
+        this.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave() {
+    this.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    this.classList.remove('drag-over');
+
+    if (this === draggedEmployee) return;
+
+    const fromIndex = parseInt(draggedEmployee.dataset.index);
+    const toIndex = parseInt(this.dataset.index);
+
+    const [moved] = state.employees.splice(fromIndex, 1);
+    state.employees.splice(toIndex, 0, moved);
+
+    saveState();
+    renderEmployeeGrid();
 }
 
 function updateTimers() {
     document.querySelectorAll('.employee-timer[data-start]').forEach(el => {
-        if (!el.dataset.start) return;
+        if (!el.dataset.start) {
+            el.textContent = '00:00';
+            return;
+        }
         const diff = Date.now() - new Date(el.dataset.start).getTime();
         const min = Math.floor(diff / 60000);
         const sec = Math.floor((diff % 60000) / 1000);
@@ -297,7 +381,8 @@ function registerBreak(empId, type) {
         endTime: null
     });
     saveState();
-    renderAll();
+    renderEmployeeGrid();
+    renderRecords();
 }
 
 function registerReturn(empId) {
@@ -305,7 +390,8 @@ function registerReturn(empId) {
     if (rec) {
         rec.endTime = new Date().toISOString();
         saveState();
-        renderAll();
+        renderEmployeeGrid();
+        renderRecords();
     }
 }
 
